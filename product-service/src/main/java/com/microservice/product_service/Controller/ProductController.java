@@ -3,11 +3,13 @@ package com.microservice.product_service.Controller;
 import com.microservice.product_service.Entity.Product;
 import com.microservice.product_service.Repository.ProductRepo;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@EnableCaching
 @RestController
 @RequestMapping("/products")
 public class ProductController {
@@ -20,12 +22,15 @@ public class ProductController {
         return productRepo.save(product);
     }
     @GetMapping
+    @Cacheable(value = "product", key = "'allProducts'")
     public List<Product> getAllProducts() {
         return productRepo.findAll();
     }
 
+
     @GetMapping("/{productId}")
-    public Product getProductById(@PathVariable Long productId) {
+    @Cacheable(value = "product", key = "#productId")
+    public Product getProductById(@PathVariable long productId) {
         return productRepo.findById(productId).orElseThrow(() -> new RuntimeException("product not found!"));
 
     }
