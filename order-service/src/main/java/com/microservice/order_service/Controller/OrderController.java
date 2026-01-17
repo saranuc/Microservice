@@ -5,6 +5,8 @@ import com.microservice.order_service.DTO.ProductDTO;
 import com.microservice.order_service.Entity.Order;
 import com.microservice.order_service.Repository.OrderRepository;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -12,10 +14,12 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.lang.reflect.Type;
 import java.util.List;
 
 @RestController
 @RequestMapping("orders")
+
 public class OrderController {
 
     @Autowired
@@ -28,6 +32,7 @@ public class OrderController {
 
     @PostMapping("/orderPlacing")
     @CircuitBreaker(name=PRODUCT_SERVICE,fallbackMethod = "displayErrorPage")
+    @RateLimiter(name = PRODUCT_SERVICE,fallbackMethod = "fallbackMethod")
     public Mono<ResponseEntity<OrderResponseDTO>> placeOrder(@RequestBody Order order){
         return webClientConfig.build().get().uri("http://localhost:8081/products/"+order.getProductId())
                 .retrieve().bodyToMono(ProductDTO.class).map(productDTO -> {
@@ -66,6 +71,27 @@ public class OrderController {
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(orderResponseDTO));
     }
+
+    public Mono<ResponseEntity<OrderResponseDTO>> fallbackMethod(
+            Order order,
+            RequestNotPermitted ex
+    ) {
+        OrderResponseDTO dto = new OrderResponseDTO();
+        dto.setProductId(order.getProductId());
+        dto.setQuantity(order.getQuantity());
+        dto.setProductName("Rate limit exceeded");
+        dto.setProductPrice(0.0);
+        dto.setOrderId(0L);
+
+        System.err.println("RateLimiter triggered: " + ex.getMessage());
+
+        return Mono.just(
+                ResponseEntity
+                        .status(HttpStatus.TOO_MANY_REQUESTS)
+                        .body(dto)
+        );
+    }
+
 
 
 }
